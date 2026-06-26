@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>RC Car · ESP32 Bridge</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>RC Car <span class="sub">ESP32 ↔ Pi bridge</span></h1>
+    <div class="pills">
+      <div id="conn"   class="pill bad">UI: connecting…</div>
+      <div id="serial" class="pill bad">serial: ?</div>
+    </div>
+  </header>
+
+  <main>
+    <!-- LEFT: drive + maneuvers -->
+    <section class="card">
+      <h2>Drive</h2>
+      <div id="pad" class="pad">
+        <div id="stick" class="stick"></div>
+        <div class="padhint">drag · release = stop · WASD/arrows · space = stop</div>
+      </div>
+      <div class="row">
+        <button class="big stop" id="estop">■ STOP</button>
+        <button id="cancel">Cancel auto</button>
+      </div>
+
+      <h2>Timed maneuvers <span class="muted">(open-loop)</span></h2>
+      <div class="grid2">
+        <label>Turn (deg)<input id="turnDeg" type="number" value="90" step="5"></label>
+        <button id="turnBtn">Turn</button>
+        <label>Move (m)<input id="moveM" type="number" value="0.5" step="0.1"></label>
+        <button id="moveBtn">Move</button>
+        <label>Goto X (m)<input id="gx" type="number" value="0.5" step="0.1"></label>
+        <label>Goto Y (m)<input id="gy" type="number" value="0.5" step="0.1"></label>
+        <button id="gotoBtn" class="span2">Goto X,Y</button>
+      </div>
+    </section>
+
+    <!-- MIDDLE: live IMU + telemetry -->
+    <section class="card">
+      <h2>IMU</h2>
+      <div class="level">
+        <div id="horizon" class="horizon"><div class="hline"></div></div>
+        <div class="readouts">
+          <div><span class="k">roll</span><b id="roll">0.0</b>°</div>
+          <div><span class="k">pitch</span><b id="pitch">0.0</b>°</div>
+        </div>
+      </div>
+      <p class="note">roll/pitch come from ESP32 telemetry; they read 0 until the
+        IMU is wired + <code>Telemetry::roll()/pitch()</code> are filled in firmware.</p>
+
+      <h2>Telemetry</h2>
+      <div class="tele">
+        <div><span class="k">battery</span><b id="batt">–</b> V</div>
+        <div><span class="k">busy</span><b id="busy">–</b></div>
+        <div><span class="k">pwm L</span><b id="pwmL">0</b></div>
+        <div><span class="k">pwm R</span><b id="pwmR">0</b></div>
+        <div><span class="k">last rx</span><b id="age">–</b></div>
+      </div>
+    </section>
+
+    <!-- RIGHT: tuning + per-motor test -->
+    <section class="card">
+      <h2>Tuning <span class="muted">(live → ESP32)</span></h2>
+      <div class="sliders">
+        <label>max speed <output id="vMax">200</output>
+          <input id="sMax" type="range" min="0" max="255" value="200"></label>
+        <label>trim <output id="vTrim">0</output>
+          <input id="sTrim" type="range" min="-50" max="50" value="0"></label>
+        <label>min pwm <output id="vMin">70</output>
+          <input id="sMin" type="range" min="0" max="200" value="70"></label>
+        <label>slew <output id="vSlew">12</output>
+          <input id="sSlew" type="range" min="1" max="255" value="12"></label>
+        <label>deadband <output id="vDb">6</output>
+          <input id="sDb" type="range" min="0" max="40" value="6"></label>
+      </div>
+      <button id="saveBtn">💾 Save to ESP32 flash</button>
+
+      <h2>Per-motor test</h2>
+      <div class="grid2">
+        <label>motor
+          <select id="tMotor">
+            <option value="0">0 · LF</option><option value="1">1 · LR</option>
+            <option value="2">2 · RF</option><option value="3">3 · RR</option>
+          </select></label>
+        <label>pwm <input id="tPwm" type="number" value="160" min="-255" max="255"></label>
+        <label>ms <input id="tMs" type="number" value="1500" min="0" max="10000"></label>
+        <button id="testBtn">Spin one</button>
+      </div>
+    </section>
+  </main>
+
+  <footer><span id="log">ready.</span></footer>
+  <script src="app.js"></script>
+</body>
+</html>

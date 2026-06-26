@@ -1,0 +1,7 @@
+# Timed spin turn (open-loop, no sensors). degrees>0 = one way, <0 = the other.
+float32 degrees
+int16   speed          # 0..255 motor speed for the turn (0 -> bridge default 160)
+float32 ms_per_degree  # calibration; 0 -> bridge default 8.0
+---
+bool    accepted
+string  message

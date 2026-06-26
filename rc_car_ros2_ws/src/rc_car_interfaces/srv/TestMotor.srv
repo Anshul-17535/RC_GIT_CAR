@@ -1,0 +1,7 @@
+# Drive ONE motor directly (bypasses mix/ramp/kickstart/invert) for diagnostics.
+int8    motor          # 0=LF 1=LR 2=RF 3=RR
+int16   pwm            # -255..255
+int32   duration_ms    # auto-stops; 0 -> 1500, capped at 10000
+---
+bool    accepted
+string  message

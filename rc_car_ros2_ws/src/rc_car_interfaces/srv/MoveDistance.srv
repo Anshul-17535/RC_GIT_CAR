@@ -1,0 +1,7 @@
+# Timed straight move (open-loop). meters<0 = reverse.
+float32 meters
+int16   speed          # 0..255 (0 -> bridge default 160)
+float32 ms_per_meter   # calibration; 0 -> bridge default 1200.0
+---
+bool    accepted
+string  message

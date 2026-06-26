@@ -1,0 +1,9 @@
+# Relative X/Y move: turn toward (x,y) then drive the straight-line distance.
+float32 x
+float32 y
+int16   speed          # 0..255 (0 -> bridge default 160)
+float32 ms_per_meter   # 0 -> bridge default 1200.0
+float32 ms_per_degree  # 0 -> bridge default 8.0
+---
+bool    accepted
+string  message
