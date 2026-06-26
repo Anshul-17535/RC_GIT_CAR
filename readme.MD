@@ -12,6 +12,13 @@ beyond `pyserial`.
    └──  GET /events (SSE telem) ───┘  for your PID/nav stack
 ```
 
+
+
+ssh shiv@10.97.26.75
+
+
+
+
 ## Wiring (3.3 V both sides — no level shifter)
 | Pi (40-pin)         | ESP32          |
 |---------------------|----------------|

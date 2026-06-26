@@ -1,3 +1,48 @@
+# rc_car_bridge
+
+## ⚡ Option A — run it NOW with NO ROS (recommended if ROS install is fighting you)
+The standalone bridge is the same serial protocol + the same web UI, as a plain
+Python program. Only needs pyserial.
+
+```bash
+pip3 install pyserial --break-system-packages
+cd ~/Desktop/robot/RC_GIT/RC_GIT_CAR/rc_car_ros2_ws/src/rc_car_bridge
+python3 scripts/standalone_bridge.py --port /dev/ttyAMA0 --http 8080
+# open http://<pi-ip>:8080
+```
+No colcon, no rosbridge, no ROS. The ROS package (Option B) stays available for
+when you want `~/cmd_vel`, `~/imu`, services, etc. — the UI is identical.
+
+Test it with no car first (two terminals):
+```bash
+sudo apt install -y socat
+socat -d -d pty,raw,echo=0 pty,raw,echo=0          # prints two /dev/pts/N
+python3 scripts/fake_esp32.py /dev/pts/4
+python3 scripts/standalone_bridge.py --port /dev/pts/3 --http 8080
+```
+
+---
+
+## "Unable to locate package python3-colcon-common-extensions"
+That package lives in the **ROS 2 apt repo**. If apt can't find it, the repo
+isn't configured (or this Pi isn't Ubuntu 24.04). Fixes:
+
+* If `ros2` already works here: `pip3 install -U colcon-common-extensions --break-system-packages`
+* Add the ROS 2 apt repo (Ubuntu 24.04 / Jazzy, current 2025 method):
+```bash
+sudo apt install -y software-properties-common curl
+sudo add-apt-repository universe
+export RUV=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep tag_name | awk -F\" '{print $4}')
+curl -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${RUV}/ros2-apt-source_${RUV}.$(. /etc/os-release && echo $VERSION_CODENAME)_all.deb"
+sudo apt install -y /tmp/ros2-apt-source.deb
+sudo apt update
+sudo apt install -y python3-colcon-common-extensions
+```
+* If this Pi runs **Raspberry Pi OS / Debian**, there are no native Jazzy debs.
+  Use Option A above, or run the ROS package inside a `ros:jazzy` Docker image.
+
+---
+
 # rc_car_bridge — ROS 2 (Jazzy) ↔ ESP32 RC car  (no rosbridge)
 
 Bridges your ESP32 firmware (`RC_Car.ino` + `pilink.*`) to ROS 2 over UART and

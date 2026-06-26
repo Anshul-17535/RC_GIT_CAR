@@ -329,14 +329,22 @@ class UartBridge(Node):
                 s = -s
             self._cmd = (t, s)
             return self._write(P.drive(t, s))
-        if cmd in ("turnAngle", "moveDistance", "gotoCoord",
-                   "testMotor", "stop", "cancelAuto"):
+        if cmd in ("turnAngle", "moveDistance", "gotoCoord", "testMotor"):
+            # Mark busy LOCALLY now, don't wait for the next telemetry frame
+            # (up to 200ms away) to confirm — otherwise the 20Hz keepalive
+            # sends drive(0,0) in the gap and cancels the maneuver we just
+            # started (ESP32 drive() calls clearAuto()).
             self._cmd = (0, 0)
+            self._busy = True
+        elif cmd in ("stop", "cancelAuto", "testStop"):
+            self._cmd = (0, 0)
+            self._busy = False
         return self._write(obj)
 
     # ---- ROS services (for the PID/nav stack) ----
     def _srv_turn(self, req, resp):
         self._cmd = (0, 0)
+        self._busy = True
         ok = self._write(P.turn_angle(req.degrees, req.speed or 160,
                                       req.ms_per_degree or 8.0))
         resp.accepted = ok; resp.message = "sent" if ok else "serial down"
@@ -344,6 +352,7 @@ class UartBridge(Node):
 
     def _srv_move(self, req, resp):
         self._cmd = (0, 0)
+        self._busy = True
         ok = self._write(P.move_distance(req.meters, req.speed or 160,
                                          req.ms_per_meter or 1200.0))
         resp.accepted = ok; resp.message = "sent" if ok else "serial down"
@@ -351,6 +360,7 @@ class UartBridge(Node):
 
     def _srv_goto(self, req, resp):
         self._cmd = (0, 0)
+        self._busy = True
         ok = self._write(P.goto_coord(req.x, req.y, req.speed or 160,
                                       req.ms_per_meter or 1200.0,
                                       req.ms_per_degree or 8.0))
@@ -359,17 +369,20 @@ class UartBridge(Node):
 
     def _srv_test(self, req, resp):
         self._cmd = (0, 0)
+        self._busy = True
         ok = self._write(P.test_motor(req.motor, req.pwm, req.duration_ms or 1500))
         resp.accepted = ok; resp.message = "sent" if ok else "serial down"
         return resp
 
     def _srv_stop(self, req, resp):
-        self._cmd = (0, 0); ok = self._write(P.stop())
+        self._cmd = (0, 0); self._busy = False
+        ok = self._write(P.stop())
         resp.success = ok; resp.message = "stopped" if ok else "serial down"
         return resp
 
     def _srv_cancel(self, req, resp):
-        self._cmd = (0, 0); ok = self._write(P.cancel_auto())
+        self._cmd = (0, 0); self._busy = False
+        ok = self._write(P.cancel_auto())
         resp.success = ok; resp.message = "cancelled" if ok else "serial down"
         return resp
 
