@@ -49,7 +49,7 @@ source install/setup.bash
 
 ## Run
 ```bash
-ros2 launch rc_car_bridge bringup.launch.py serial_port:=/dev/ttyAMA0
+ros2 launch rc_car_bridge bringup.launch.py serial_port:=/dev/serial0
 ```
 Open **http://<pi-ip>:8080** on any device on the same network. That's it.
 

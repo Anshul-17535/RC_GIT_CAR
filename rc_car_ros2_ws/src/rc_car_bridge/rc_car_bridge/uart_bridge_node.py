@@ -29,6 +29,8 @@ import math
 import os
 import threading
 import time
+from picamera2 import Picamera2
+import cv2
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import rclpy
@@ -88,6 +90,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send_file("index.html")
         if path in ("/style.css", "/app.js"):
             return self._send_file(path.lstrip("/"))
+        if path == "/video":
+            return self._stream_video()
         self._send_bytes(404, "text/plain", b"not found")
 
     def do_POST(self):
@@ -102,6 +106,29 @@ class _Handler(BaseHTTPRequestHandler):
         ok = self._node.handle_ui_command(obj)
         self._send_bytes(200, "application/json",
                          json.dumps({"ok": bool(ok)}).encode())
+
+    def _stream_video(self):
+        self.send_response(200)
+        self.send_header(
+            "Content-Type",
+            "multipart/x-mixed-replace; boundary=frame"
+        )
+        self.end_headers()
+
+        try:
+            while self._node.running:
+                frame = self._node.picam2.capture_array()
+
+                _, jpeg = cv2.imencode(".jpg", frame)
+
+                self.wfile.write(b"--frame\r\n")
+                self.wfile.write(b"Content-Type: image/jpeg\r\n\r\n")
+                self.wfile.write(jpeg.tobytes())
+                self.wfile.write(b"\r\n")
+                self.wfile.flush()
+
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def _send_file(self, name):
         fp = os.path.join(self._node.web_dir, name)
@@ -208,7 +235,14 @@ class UartBridge(Node):
         self._httpd.daemon_threads = True
         self._httpd.node = self
         threading.Thread(target=self._httpd.serve_forever, daemon=True).start()
+        self.picam2 = Picamera2()
 
+        config = self.picam2.create_video_configuration(
+            main={"size": (640, 480), "format": "RGB888"}
+        )
+
+        self.picam2.configure(config)
+        self.picam2.start()
         # Ask the ESP32 for its saved config so the UI tuning panel shows the
         # ACTUAL persisted values. (We no longer push the Pi's param defaults on
         # boot — that would clobber the values saved in the ESP32's flash.)
