@@ -1,0 +1,43 @@
+UPDATE — orientation cube + IMU + PID tuning + per-motor tuning
+================================================================
+Bridge + UI now handle the richer ESP32 protocol. PAIR THIS WITH the matching
+firmware update (rc_car_firmware_update.zip) — both must be flashed/deployed.
+
+UI (open http://<pi-ip>:8080 after launch):
+  • Orientation — live 3D cube driven by the IMU, roll/pitch/yaw readout,
+    gyro + accel values, "Zero yaw" button.
+  • Telemetry — battery, busy, pwm L/R, link age, heading-hold state.
+  • Heading-hold PID — Kp/Ki/Kd, target, throttle, Engage/Disengage, live
+    error/output. Runs on the ESP32; the Pi just commands + visualizes.
+  • Tuning — all global params (max speed, trim, min pwm, slew, deadband) shown
+    with the ACTUAL values read from the ESP32's flash; "Save all" persists
+    tuning + per-motor trim/invert + PID gains to NVS.
+  • Per-motor tuning — per motor (LF/LR/RF/RR): invert toggle, trim slider
+    (0–150 %), and a Test button.
+
+Bridge changes:
+  • Parses the extended telemetry (yaw/gyro/accel/IMU-present/PID state) and
+    publishes a proper sensor_msgs/Imu with real yaw.
+  • Parses ESP32 config frames and serves them to the UI (so the tuning panel
+    shows saved values). On boot it now REQUESTS config instead of pushing the
+    Pi's defaults (which would overwrite your saved flash values).
+  • Keepalive is suppressed during heading-hold (as well as timed maneuvers),
+    so the Pi never fights the ESP32 PID.
+
+APPLY ON THE PI:
+  cp -r rc_car_ros2_ws/src/rc_car_bridge/* \
+        ~/Desktop/robot/RC_GIT/RC_GIT_CAR/rc_car_ros2_ws/src/rc_car_bridge/
+  cd ~/Desktop/robot/RC_GIT/RC_GIT_CAR/rc_car_ros2_ws
+  colcon build --packages-select rc_car_interfaces rc_car_bridge
+  source install/setup.bash
+  ros2 launch rc_car_bridge bringup.launch.py serial_port:=/dev/serial0
+
+NO-ROS option (same UI, pyserial only):
+  python3 src/rc_car_bridge/scripts/standalone_bridge.py --port /dev/serial0 --http 8080
+
+TEST WITHOUT THE CAR (simulator, on the Pi or a laptop):
+  sudo apt install socat
+  socat -d -d pty,raw,echo=0 pty,raw,echo=0        # note the two /dev/pts/N
+  python3 src/rc_car_bridge/scripts/fake_esp32.py /dev/pts/<A>
+  python3 src/rc_car_bridge/scripts/standalone_bridge.py --port /dev/pts/<B> --http 8080
+  # open http://localhost:8080 — cube sweeps, engage heading-hold, watch it converge

@@ -168,10 +168,15 @@ class UartBridge(Node):
         self._ser_lock = threading.Lock()
         self._cmd = (0, 0)
         self._busy = False
+        self._hh = False            # heading-hold active (mirror of telemetry "hh")
         self.running = True
         self._rx_buf = b""
-        self._latest = {"battery": 0.0, "roll": 0.0, "pitch": 0.0,
-                        "busy": False, "pwm_left": 0, "pwm_right": 0}
+        self._latest = {"battery": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
+                        "gx": 0.0, "gy": 0.0, "gz": 0.0, "ax": 0.0, "ay": 0.0,
+                        "az": 0.0, "imu": False, "busy": False, "pwm_left": 0,
+                        "pwm_right": 0, "hh": False, "tgt": 0.0, "err": 0.0,
+                        "out": 0.0}
+        self._config = None         # last config snapshot from the ESP32
         self._last_rx_ms = 0
 
         # ROS pubs
@@ -204,7 +209,10 @@ class UartBridge(Node):
         self._httpd.node = self
         threading.Thread(target=self._httpd.serve_forever, daemon=True).start()
 
-        self._push_tuning()
+        # Ask the ESP32 for its saved config so the UI tuning panel shows the
+        # ACTUAL persisted values. (We no longer push the Pi's param defaults on
+        # boot — that would clobber the values saved in the ESP32's flash.)
+        self._write(P.get_config())
         self.get_logger().info(
             f"bridge up: serial {self._port_name}@{self._baud}, "
             f"UI http://<pi-ip>:{self._http_port}, drive {self._rate:.0f} Hz")
@@ -263,10 +271,13 @@ class UartBridge(Node):
                 obj = P.parse_line(raw)
                 if P.is_telemetry(obj):
                     self._publish_telemetry(P.decode_telemetry(obj))
+                elif P.is_config(obj):
+                    self._config = obj          # cache for the UI tuning panel
 
     # ---- publishing ----
     def _publish_telemetry(self, t):
         self._busy = t["busy"]
+        self._hh = t["hh"]
         self._latest = t
         self._last_rx_ms = int(time.time() * 1000)
         now = self.get_clock().now().to_msg()
@@ -286,12 +297,18 @@ class UartBridge(Node):
             imu.header.stamp = now
             imu.header.frame_id = self._frame_id
             qx, qy, qz, qw = _rpy_to_quat(
-                math.radians(t["roll"]), math.radians(t["pitch"]), 0.0)
+                math.radians(t["roll"]), math.radians(t["pitch"]),
+                math.radians(t["yaw"]))
             imu.orientation.x = qx; imu.orientation.y = qy
             imu.orientation.z = qz; imu.orientation.w = qw
-            imu.orientation_covariance = [1e-3, 0, 0, 0, 1e-3, 0, 0, 0, -1.0]
-            imu.angular_velocity_covariance = [-1.0, 0, 0, 0, 0, 0, 0, 0, 0]
-            imu.linear_acceleration_covariance = [-1.0, 0, 0, 0, 0, 0, 0, 0, 0]
+            imu.orientation_covariance = [1e-3, 0, 0, 0, 1e-3, 0, 0, 0, 5e-2]
+            # gyro deg/s -> rad/s, accel g -> m/s^2
+            imu.angular_velocity.x = math.radians(t["gx"])
+            imu.angular_velocity.y = math.radians(t["gy"])
+            imu.angular_velocity.z = math.radians(t["gz"])
+            imu.linear_acceleration.x = t["ax"] * 9.80665
+            imu.linear_acceleration.y = t["ay"] * 9.80665
+            imu.linear_acceleration.z = t["az"] * 9.80665
             self.pub_imu.publish(imu)
 
     def latest_status(self):
@@ -299,6 +316,7 @@ class UartBridge(Node):
         s = dict(self._latest)
         s["serial"] = self._ser is not None
         s["age_ms"] = age
+        s["config"] = self._config       # null until the ESP32 sends one
         return s
 
     # ---- inputs ----
@@ -310,7 +328,10 @@ class UartBridge(Node):
         self._cmd = (t, s)
 
     def _tick(self):
-        if self._busy:
+        # Suppress the drive keepalive while a maneuver OR heading-hold is
+        # active — both drive the motors autonomously (a drive() cancels a
+        # maneuver, and fights the PID during heading-hold).
+        if self._busy or self._hh:
             return
         t, s = self._cmd
         self._write(P.drive(t, s))
@@ -339,6 +360,12 @@ class UartBridge(Node):
         elif cmd in ("stop", "cancelAuto", "testStop"):
             self._cmd = (0, 0)
             self._busy = False
+            self._hh = False
+        elif cmd == "headingHold":
+            # Engage/disengage locally right away so the keepalive yields to
+            # (or resumes from) the ESP32 PID without a telemetry round-trip.
+            self._cmd = (0, 0)
+            self._hh = bool(obj.get("enable", False))
         return self._write(obj)
 
     # ---- ROS services (for the PID/nav stack) ----

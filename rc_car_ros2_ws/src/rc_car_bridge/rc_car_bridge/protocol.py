@@ -118,13 +118,30 @@ def is_telemetry(obj):
     return isinstance(obj, dict) and "batt" in obj and "cmd" not in obj
 
 
+def is_config(obj):
+    """Config snapshots are tagged type:'config' (sent on getConfig / save)."""
+    return isinstance(obj, dict) and obj.get("type") == "config"
+
+
 def decode_telemetry(obj):
     """Normalise a telemetry dict into typed fields with safe defaults."""
     return {
         "battery": float(obj.get("batt", 0.0)),
         "roll": float(obj.get("roll", 0.0)),
         "pitch": float(obj.get("pitch", 0.0)),
+        "yaw": float(obj.get("yaw", 0.0)),
+        "gx": float(obj.get("gx", 0.0)),
+        "gy": float(obj.get("gy", 0.0)),
+        "gz": float(obj.get("gz", 0.0)),
+        "ax": float(obj.get("ax", 0.0)),
+        "ay": float(obj.get("ay", 0.0)),
+        "az": float(obj.get("az", 0.0)),
+        "imu": bool(obj.get("imu", False)),
         "busy": bool(obj.get("auto", False)),
         "pwm_left": int(obj.get("pwmL", 0)),
         "pwm_right": int(obj.get("pwmR", 0)),
+        "hh": bool(obj.get("hh", False)),
+        "tgt": float(obj.get("tgt", 0.0)),
+        "err": float(obj.get("err", 0.0)),
+        "out": float(obj.get("out", 0.0)),
     }

@@ -51,3 +51,22 @@ def test_parse_garbage_returns_none():
     assert P.parse_line("not json") is None
     assert P.parse_line("") is None
     assert P.parse_line("[1,2,3]") is None     # not a dict
+
+
+def test_decode_telemetry_rich_fields():
+    raw = ('{"batt":7.6,"roll":1.0,"pitch":2.0,"yaw":33.0,"gx":0.1,"gy":0.2,'
+           '"gz":0.3,"ax":0.0,"ay":0.0,"az":1.0,"imu":true,"auto":false,'
+           '"pwmL":10,"pwmR":-10,"hh":true,"tgt":90.0,"err":-5.0,"out":40.0}')
+    obj = P.parse_line(raw)
+    assert P.is_telemetry(obj)
+    t = P.decode_telemetry(obj)
+    assert t["yaw"] == 33.0 and t["imu"] is True
+    assert t["hh"] is True and t["tgt"] == 90.0
+    assert t["gz"] == 0.3 and t["az"] == 1.0
+
+
+def test_is_config_detects_config_frames():
+    cfg = P.parse_line('{"type":"config","maxSpeed":200,"mt":[100,100,100,100],"kp":4.0}')
+    assert P.is_config(cfg)
+    assert not P.is_config(P.parse_line('{"batt":7.6}'))
+    assert not P.is_config(P.parse_line('{"cmd":"drive","t":0,"s":0}'))

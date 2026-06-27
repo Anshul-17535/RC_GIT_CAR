@@ -12,22 +12,20 @@
     <div class="pills">
       <div id="conn"   class="pill bad">UI: connecting…</div>
       <div id="serial" class="pill bad">serial: ?</div>
+      <div id="imuPill" class="pill bad">IMU: ?</div>
     </div>
   </header>
 
   <main>
-    <!-- LEFT: drive + maneuvers -->
+    <!-- DRIVE -->
     <section class="card">
       <h2>Drive</h2>
-      <div id="pad" class="pad">
-        <div id="stick" class="stick"></div>
-        <div class="padhint">drag · release = stop · WASD/arrows · space = stop</div>
-      </div>
+      <div id="pad" class="pad"><div id="stick" class="stick"></div>
+        <div class="padhint">drag · release = stop · WASD/arrows · space = stop</div></div>
       <div class="row">
         <button class="big stop" id="estop">■ STOP</button>
         <button id="cancel">Cancel auto</button>
       </div>
-
       <h2>Timed maneuvers <span class="muted">(open-loop)</span></h2>
       <div class="grid2">
         <label>Turn (deg)<input id="turnDeg" type="number" value="90" step="5"></label>
@@ -40,19 +38,39 @@
       </div>
     </section>
 
-    <!-- MIDDLE: live IMU + telemetry -->
+    <!-- ORIENTATION CUBE + IMU -->
     <section class="card">
-      <h2>IMU</h2>
-      <div class="level">
-        <div id="horizon" class="horizon"><div class="hline"></div></div>
-        <div class="readouts">
-          <div><span class="k">roll</span><b id="roll">0.0</b>°</div>
-          <div><span class="k">pitch</span><b id="pitch">0.0</b>°</div>
+      <h2>Orientation</h2>
+      <div class="scene">
+        <div class="view">
+          <div id="cube" class="cube">
+            <div class="face front">FRONT</div>
+            <div class="face back">BACK</div>
+            <div class="face right">R</div>
+            <div class="face left">L</div>
+            <div class="face top"><span class="arrow">▲</span></div>
+            <div class="face bottom">BOT</div>
+          </div>
         </div>
       </div>
-      <p class="note">roll/pitch come from ESP32 telemetry; they read 0 until the
-        IMU is wired + <code>Telemetry::roll()/pitch()</code> are filled in firmware.</p>
+      <div class="rpy">
+        <div><span class="k">roll</span><b id="roll">0.0</b>°</div>
+        <div><span class="k">pitch</span><b id="pitch">0.0</b>°</div>
+        <div><span class="k">yaw</span><b id="yaw">0.0</b>°</div>
+      </div>
+      <button id="zeroYaw" class="wide">Zero yaw (set forward)</button>
+      <h2>IMU sensors</h2>
+      <div class="imu">
+        <div class="imucol"><span class="k">gyro °/s</span>
+          <div>x <b id="gx">0.00</b></div><div>y <b id="gy">0.00</b></div><div>z <b id="gz">0.00</b></div></div>
+        <div class="imucol"><span class="k">accel g</span>
+          <div>x <b id="ax">0.00</b></div><div>y <b id="ay">0.00</b></div><div>z <b id="az">0.00</b></div></div>
+      </div>
+      <p class="note" id="imuNote">No IMU detected — wire an MPU6050 (SDA=21, SCL=15) and reboot the ESP32.</p>
+    </section>
 
+    <!-- TELEMETRY -->
+    <section class="card">
       <h2>Telemetry</h2>
       <div class="tele">
         <div><span class="k">battery</span><b id="batt">–</b> V</div>
@@ -60,12 +78,31 @@
         <div><span class="k">pwm L</span><b id="pwmL">0</b></div>
         <div><span class="k">pwm R</span><b id="pwmR">0</b></div>
         <div><span class="k">last rx</span><b id="age">–</b></div>
+        <div><span class="k">heading-hold</span><b id="hhState">off</b></div>
+      </div>
+
+      <h2>Heading-hold PID <span class="muted">(on ESP32)</span></h2>
+      <div class="pidgrid">
+        <label>Kp <input id="kp" type="number" step="0.1" value="4.0"></label>
+        <label>Ki <input id="ki" type="number" step="0.05" value="0.0"></label>
+        <label>Kd <input id="kd" type="number" step="0.05" value="0.6"></label>
+        <button id="pidSet" class="span3">Apply gains</button>
+        <label>Target (deg)<input id="hhTarget" type="number" step="5" value="0"></label>
+        <label>Throttle <input id="hhThrottle" type="number" step="10" value="0"></label>
+        <button id="hhUseCur">Use current yaw</button>
+        <button id="hhOn" class="span2 go">Engage hold</button>
+        <button id="hhOff" class="stop">Disengage</button>
+      </div>
+      <div class="pidlive">
+        <div><span class="k">target</span><b id="pTgt">0.0</b>°</div>
+        <div><span class="k">error</span><b id="pErr">0.0</b>°</div>
+        <div><span class="k">output</span><b id="pOut">0</b></div>
       </div>
     </section>
 
-    <!-- RIGHT: tuning + per-motor test -->
+    <!-- TUNING (all params, saved) -->
     <section class="card">
-      <h2>Tuning <span class="muted">(live → ESP32)</span></h2>
+      <h2>Tuning <span class="muted">(live → ESP32 · values from flash)</span></h2>
       <div class="sliders">
         <label>max speed <output id="vMax">200</output>
           <input id="sMax" type="range" min="0" max="255" value="200"></label>
@@ -78,19 +115,16 @@
         <label>deadband <output id="vDb">6</output>
           <input id="sDb" type="range" min="0" max="40" value="6"></label>
       </div>
-      <button id="saveBtn">💾 Save to ESP32 flash</button>
+      <button id="saveBtn" class="wide go">💾 Save all to ESP32 flash</button>
+      <p class="note">Save persists tuning + per-motor trim/invert + PID gains to the ESP32's NVS.</p>
+    </section>
 
-      <h2>Per-motor test</h2>
-      <div class="grid2">
-        <label>motor
-          <select id="tMotor">
-            <option value="0">0 · LF</option><option value="1">1 · LR</option>
-            <option value="2">2 · RF</option><option value="3">3 · RR</option>
-          </select></label>
-        <label>pwm <input id="tPwm" type="number" value="160" min="-255" max="255"></label>
-        <label>ms <input id="tMs" type="number" value="1500" min="0" max="10000"></label>
-        <button id="testBtn">Spin one</button>
-      </div>
+    <!-- PER-MOTOR -->
+    <section class="card">
+      <h2>Per-motor tuning</h2>
+      <div id="motors" class="motors"><!-- rows injected by app.js --></div>
+      <p class="note">Trim scales one motor's PWM (100 % = unchanged) to balance mismatched motors.
+        Invert flips its direction. Test spins it alone at +160 for 1.5 s.</p>
     </section>
   </main>
 

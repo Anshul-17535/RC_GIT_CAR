@@ -55,8 +55,18 @@ def is_telemetry(o):
 
 def decode_telemetry(o):
     return {"battery": float(o.get("batt", 0.0)), "roll": float(o.get("roll", 0.0)),
-            "pitch": float(o.get("pitch", 0.0)), "busy": bool(o.get("auto", False)),
-            "pwm_left": int(o.get("pwmL", 0)), "pwm_right": int(o.get("pwmR", 0))}
+            "pitch": float(o.get("pitch", 0.0)), "yaw": float(o.get("yaw", 0.0)),
+            "gx": float(o.get("gx", 0.0)), "gy": float(o.get("gy", 0.0)),
+            "gz": float(o.get("gz", 0.0)), "ax": float(o.get("ax", 0.0)),
+            "ay": float(o.get("ay", 0.0)), "az": float(o.get("az", 0.0)),
+            "imu": bool(o.get("imu", False)), "busy": bool(o.get("auto", False)),
+            "pwm_left": int(o.get("pwmL", 0)), "pwm_right": int(o.get("pwmR", 0)),
+            "hh": bool(o.get("hh", False)), "tgt": float(o.get("tgt", 0.0)),
+            "err": float(o.get("err", 0.0)), "out": float(o.get("out", 0.0))}
+
+
+def is_config(o):
+    return isinstance(o, dict) and o.get("type") == "config"
 
 
 # ------------------------------------------------------------------- bridge
@@ -70,20 +80,21 @@ class Bridge:
         self.lock = threading.Lock()
         self.cmd = (0, 0)
         self.busy = False
+        self.hh = False
         self.running = True
         self.rx = b""
-        self.latest = {"battery": 0.0, "roll": 0.0, "pitch": 0.0, "busy": False,
-                       "pwm_left": 0, "pwm_right": 0}
+        self.latest = {"battery": 0.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
+                       "gx": 0.0, "gy": 0.0, "gz": 0.0, "ax": 0.0, "ay": 0.0,
+                       "az": 0.0, "imu": False, "busy": False, "pwm_left": 0,
+                       "pwm_right": 0, "hh": False, "tgt": 0.0, "err": 0.0, "out": 0.0}
+        self.config = None
         self.last_rx_ms = 0
         self.web_dir = WEB_DIR
         self._open()
         threading.Thread(target=self._read_loop, daemon=True).start()
         threading.Thread(target=self._keepalive_loop, daemon=True).start()
-        # push sane defaults to the ESP32 (matches firmware power-on)
-        for d in ({"cmd": "speed", "v": 200}, {"cmd": "trim", "v": 0},
-                  {"cmd": "minpwm", "v": 70}, {"cmd": "slew", "v": 12},
-                  {"cmd": "deadband", "v": 6}):
-            self.write(d)
+        # ask the ESP32 for its saved config so the UI shows real values
+        self.write({"cmd": "getConfig"})
 
     def _open(self):
         try:
@@ -138,11 +149,14 @@ class Bridge:
                 if is_telemetry(o):
                     self.latest = decode_telemetry(o)
                     self.busy = self.latest["busy"]
+                    self.hh = self.latest["hh"]
                     self.last_rx_ms = int(time.time() * 1000)
+                elif is_config(o):
+                    self.config = o
 
     def _keepalive_loop(self):
         while self.running:
-            if not self.busy:
+            if not self.busy and not self.hh:
                 t, s = self.cmd
                 self.write({"cmd": "drive", "t": t, "s": s})
             time.sleep(self.period)
@@ -152,6 +166,7 @@ class Bridge:
         s = dict(self.latest)
         s["serial"] = self.ser is not None
         s["age_ms"] = age
+        s["config"] = self.config
         return s
 
     def command(self, obj):
@@ -177,6 +192,10 @@ class Bridge:
         elif cmd in ("stop", "cancelAuto", "testStop"):
             self.cmd = (0, 0)
             self.busy = False
+            self.hh = False
+        elif cmd == "headingHold":
+            self.cmd = (0, 0)
+            self.hh = bool(obj.get("enable", False))
         return self.write(obj)
 
 
