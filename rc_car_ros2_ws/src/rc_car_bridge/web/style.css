@@ -110,11 +110,21 @@ footer{padding:8px 18px;border-top:1px solid var(--line);color:var(--mut);
     margin-bottom:16px;
 }
 
+.camera-card{
+    grid-column:1 / -1;
+}
+
+#camera{
+    width:100%;
+    height:auto;
+    display:block;
+    object-fit:contain;
+}
+
 .camera-card img{
     width:100%;
-    border-radius:10px;
-    border:1px solid var(--line);
-    display:block;
+    max-height:480px;
+    object-fit:cover;
 }
 
 @media (max-width:900px){

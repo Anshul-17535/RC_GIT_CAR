@@ -383,7 +383,9 @@ class UartBridge(Node):
             if self._invert_steer:
                 s = -s
             self._cmd = (t, s)
-            return self._write(P.drive(t, s))
+            # Don't write here.
+            # Let the 20 Hz timer send drive commands.
+            return True
         if cmd in ("turnAngle", "moveDistance", "gotoCoord", "testMotor"):
             # Mark busy LOCALLY now, don't wait for the next telemetry frame
             # (up to 200ms away) to confirm — otherwise the 20Hz keepalive
